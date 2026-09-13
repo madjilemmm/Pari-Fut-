@@ -49,6 +49,34 @@ calibrée : c'est précisément pour cela que Dixon-Coles puis la calibration
 - La Liga, Ligue 1 (volontairement hors scope tant que Premier League n'est
   pas calibrée et backtestée de façon satisfaisante).
 
+## Mise à jour — étapes calibration/simulation/ML/UI
+
+- **Calibration** (`ml/evaluation/calibration.py`) : isotonic regression fit sur 70%
+  chronologique du backtest Poisson, évaluée sur les 30% restants (jamais les mêmes
+  matchs). Résultat réel : ECE=0.074, LogLoss calibré 0.6297 vs 0.6304 brut sur la
+  même tranche — amélioration réelle mais modeste, à documenter honnêtement, pas
+  à vendre comme une révolution.
+- **Monte-Carlo** (`ml/simulations/monte_carlo.py`) : 50 000 tirages Poisson sur les
+  xG Dixon-Coles, exposé via `GET /matches/{id}/simulations`.
+- **Comparaison ML** (`ml/evaluation/compare_logistic_regression.py`) : Logistic
+  Regression sur l'écart Elo walk-forward. Résultat réel sur 342 matchs tenus à
+  l'écart : LogLoss=1.0064 vs référence Poisson 1.1215 — prometteur, mais comparé
+  sur une fenêtre différente (30% chronologique vs backtest complet), donc **pas
+  encore une preuve suffisante pour remplacer la baseline** ; nécessite un backtest
+  walk-forward complet sur la même fenêtre avant adoption.
+- **Page Model Performance** ajoutée au frontend (`/model-performance`), branchée
+  sur `GET /model/performance` qui expose maintenant Poisson brut, Poisson calibré
+  et le statut (encore incomplet) de Dixon-Coles.
+- **Dixon-Coles TEST backtest** (2023-2025) n'a pas pu être terminé dans le temps
+  imparti : le MLE hebdomadaire est nettement plus lent que le Poisson en forme
+  fermée. Le modèle sert déjà des prédictions live dans l'API (xi=0.005 choisi par
+  validation), mais **sans score de test hors échantillon complet** — annoncé tel
+  quel dans `/model/performance`, jamais présenté comme validé.
+- **PostgreSQL** : le schéma existe mais l'application tourne encore entièrement
+  sur fichiers parquet locaux. Le branchement réel de Postgres (ingestion via
+  SQLAlchemy, jobs d'écriture) reste à faire — prochaine étape technique prioritaire
+  avant toute mise en production.
+
 ## Prochaine étape proposée
 
 Implémenter Dixon-Coles (correction des scores faibles + décroissance

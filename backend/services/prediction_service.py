@@ -15,6 +15,7 @@ import pandas as pd
 
 from ml.models.dixon_coles import DixonColesModel
 from ml.models.elo import EloModel
+from ml.simulations.monte_carlo import simulate
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "processed", "matches.parquet")
 MODEL_VERSION = "edge_v0.2_dixon_coles"
@@ -95,6 +96,14 @@ def predict_match(match_id: str) -> dict:
         "confidence_note": note,
         **pred,
     }
+
+
+def simulate_match(match_id: str) -> dict:
+    pred = predict_match(match_id)
+    result = simulate(pred["home_xg"], pred["away_xg"])
+    result["home_team"] = pred["home_team"]
+    result["away_team"] = pred["away_team"]
+    return result
 
 
 def elo_ratings_snapshot(as_of_match_id: str) -> dict:

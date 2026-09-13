@@ -37,6 +37,16 @@ def get_prediction(match_id: str):
         raise HTTPException(status_code=501, detail=f"Donnée indisponible: {e}")
 
 
+@app.get("/matches/{match_id}/simulations")
+def get_simulations(match_id: str):
+    try:
+        return prediction_service.simulate_match(match_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Match introuvable")
+    except (ValueError, FileNotFoundError) as e:
+        raise HTTPException(status_code=501, detail=f"Donnée indisponible: {e}")
+
+
 @app.get("/matches/{match_id}/elo")
 def get_elo(match_id: str):
     try:
@@ -58,15 +68,36 @@ def get_injuries(match_id: str):
 @app.get("/model/performance")
 def get_model_performance():
     return {
-        "model_version": "edge_v0.2_dixon_coles",
-        "note": "Métriques issues du backtest walk-forward réel, voir docs/PHASE1_STATUS.md",
-        "baseline_poisson_edge_v0_1": {
-            "evaluation_period": "test_2023_2024_and_2024_2025",
-            "log_loss": 1.1215,
-            "brier_score": 0.5983,
-            "accuracy": 0.5377,
-        },
-        "dixon_coles_edge_v0_2": "voir data/processed/backtest_dixon_coles_results.parquet (calcul en cours / dernier run)",
+        "note": "Métriques issues de backtests walk-forward réels sur données PL réelles. Voir docs/PHASE1_STATUS.md.",
+        "models": [
+            {
+                "model_version": "edge_v0.1_poisson",
+                "evaluation_period": "test_2022_2023_to_2024_2025 (weekly walk-forward refit)",
+                "n_predictions": 1140,
+                "log_loss": 1.1215,
+                "brier_score": 0.5983,
+                "accuracy": 0.5377,
+                "status": "baseline",
+            },
+            {
+                "model_version": "edge_v0.1_poisson_isotonic_calibrated",
+                "evaluation_period": "held-out 30% slice of the backtest above",
+                "n_predictions": 342,
+                "log_loss": 0.6297,
+                "brier_score": 0.2202,
+                "expected_calibration_error": 0.0740,
+                "status": "calibration improves Brier/LogLoss vs raw on the same held-out slice (raw: LogLoss=0.6304, Brier=0.2205); see ml/evaluation/calibration.py",
+            },
+            {
+                "model_version": "edge_v0.2_dixon_coles",
+                "status": "validation-only so far — xi=0.005 selected via grid search on 2022-2023 "
+                          "(log_loss=1.0629, beats Poisson's naive reference). Full walk-forward TEST-set "
+                          "backtest (2023-2025) did not finish in time for this run: weekly MLE refits are "
+                          "far slower than the closed-form Poisson. Currently serves live predictions in "
+                          "the API without a completed out-of-sample TEST score yet — flagged here rather "
+                          "than presented as backtested.",
+            },
+        ],
     }
 
 
