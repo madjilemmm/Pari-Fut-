@@ -1,0 +1,11 @@
+pandas
+numpy
+pyarrow
+scipy
+scikit-learn
+pytest
+fastapi
+uvicorn
+pydantic
+sqlalchemy
+psycopg2-binary
