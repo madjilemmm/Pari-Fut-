@@ -22,6 +22,8 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg2://pari_fute:pari_fute@postgres:5432/pari_fute
     ports:
       - "8000:8000"
     volumes:

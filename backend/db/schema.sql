@@ -148,9 +148,24 @@ CREATE TABLE predictions (
     over_2_5_prob   DOUBLE PRECISION,
     btts_prob       DOUBLE PRECISION,
     top_scores      JSONB,                     -- [{"score":"2-1","prob":0.104}, ...]
-    confidence_score DOUBLE PRECISION,          -- data-quality score, NOT a win probability
-    CHECK (generated_at <= (SELECT kickoff_utc FROM matches m WHERE m.match_id = predictions.match_id))
+    confidence_score DOUBLE PRECISION           -- data-quality score, NOT a win probability
 );
+
+-- Postgres CHECK constraints cannot contain subqueries, so the
+-- generated_at <= kickoff_utc invariant is enforced with a trigger instead.
+CREATE OR REPLACE FUNCTION enforce_prediction_before_kickoff() RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.generated_at > (SELECT kickoff_utc FROM matches WHERE match_id = NEW.match_id) THEN
+        RAISE EXCEPTION 'prediction generated_at (%) is after match kickoff_utc for match_id %',
+            NEW.generated_at, NEW.match_id;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_prediction_before_kickoff
+    BEFORE INSERT OR UPDATE ON predictions
+    FOR EACH ROW EXECUTE FUNCTION enforce_prediction_before_kickoff();
 
 CREATE TABLE prediction_versions (
     id              SERIAL PRIMARY KEY,

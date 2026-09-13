@@ -1,23 +1,32 @@
 """
-Serves predictions strictly from real historical data (data/processed/matches.parquet).
+Serves predictions strictly from real historical data, read from PostgreSQL
+(backend/db/schema.sql) — no longer directly from the parquet file. The
+parquet remains the source used by jobs/load_matches_to_postgres.py to
+populate the DB in the first place.
 
 IMPORTANT — Phase 1 has no live fixtures/odds/injuries provider wired in.
 "Matches" exposed by this API are the real historical Premier League matches
 already ingested; predicting one always refits the model using ONLY matches
 that occurred strictly before its kickoff, so the numbers are the same ones
 the walk-forward backtest already validated — nothing here is invented.
+
+Predictions are NOT persisted to the `predictions` table here: the DB
+trigger correctly rejects generated_at > kickoff_utc, and since every match
+served in Phase 1 is historical (played in the past), a live "now()"
+timestamp would always be after kickoff. Backdating it would defeat the
+point of the trigger, so persistence is deferred to when a real live/future
+fixtures provider exists (Phase 2) — this is a known, documented gap, not a
+silent omission.
 """
 from __future__ import annotations
 
-import os
-
 import pandas as pd
 
+from backend.db.connection import engine
 from ml.models.dixon_coles import DixonColesModel
 from ml.models.elo import EloModel
 from ml.simulations.monte_carlo import simulate
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "processed", "matches.parquet")
 MODEL_VERSION = "edge_v0.2_dixon_coles"
 SELECTED_XI = 0.005  # chosen via validation grid search, see ml/evaluation/backtest_dixon_coles.py
 
@@ -27,12 +36,31 @@ _df: pd.DataFrame | None = None
 def _load_df() -> pd.DataFrame:
     global _df
     if _df is None:
-        if not os.path.exists(DATA_PATH):
+        query = """
+            SELECT m.match_id, ht.name AS "HomeTeam", at.name AS "AwayTeam",
+                   m.full_time_home_goals AS "FTHG", m.full_time_away_goals AS "FTAG",
+                   m.kickoff_utc, m.season
+            FROM matches m
+            JOIN teams ht ON ht.team_id = m.home_team_id
+            JOIN teams at ON at.team_id = m.away_team_id
+            WHERE m.status = 'finished'
+            ORDER BY m.kickoff_utc
+        """
+        try:
+            df = pd.read_sql(query, engine)
+        except Exception as e:
             raise FileNotFoundError(
-                "Données indisponibles: exécutez jobs/ingest_football_data_csv.py d'abord."
+                f"Données indisponibles: base PostgreSQL inaccessible ou vide ({e}). "
+                "Exécutez jobs/ingest_football_data_csv.py puis jobs/load_matches_to_postgres.py."
             )
-        _df = pd.read_parquet(DATA_PATH).sort_values("kickoff_utc").reset_index(drop=True)
-        _df["match_id"] = _df.index.astype(str)
+        if df.empty:
+            raise FileNotFoundError(
+                "Données indisponibles: aucune donnée en base. "
+                "Exécutez jobs/ingest_football_data_csv.py puis jobs/load_matches_to_postgres.py."
+            )
+        df["kickoff_utc"] = pd.to_datetime(df["kickoff_utc"])
+        df["match_id"] = df["match_id"].astype(str)
+        _df = df
     return _df
 
 
