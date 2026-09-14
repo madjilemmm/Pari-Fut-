@@ -112,6 +112,16 @@ def get_power_rating(match_id: str):
         raise HTTPException(status_code=501, detail=f"Donnée indisponible: {e}")
 
 
+@app.get("/value-bets")
+def get_value_bets(limit: int = 10):
+    """Where our independent model (never mixed with market odds) diverges
+    most from real bookmaker odds. NOT betting advice — see the note field,
+    always returned, which must be shown to the user wherever this is
+    displayed. Our own backtest shows this model is less accurate than the
+    market overall (see /model/market-comparison)."""
+    return prediction_service.find_value_bets(limit=limit)
+
+
 @app.get("/leagues")
 def get_leagues():
     return [

@@ -28,6 +28,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/model-performance" className="hover:text-terminal-text whitespace-nowrap">
                 FIABILITÉ
               </Link>
+              <Link href="/value-bets" className="hover:text-terminal-text whitespace-nowrap">
+                ÉCARTS MARCHÉ
+              </Link>
               <Link href="/comment-ca-marche" className="hover:text-terminal-text whitespace-nowrap">
                 COMMENT ÇA MARCHE
               </Link>

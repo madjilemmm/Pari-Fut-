@@ -218,16 +218,11 @@ def warm_full_history_model() -> None:
         pass  # DB not ready yet at startup is fine; predict_upcoming() will fit lazily.
 
 
-def predict_upcoming(home_team: str, away_team: str) -> dict:
-    """Predicts a genuinely future fixture (from a live fixtures provider),
-    using the model fit on the ENTIRE historical dataset — there is no
-    kickoff cutoff to respect here since nothing in our dataset is after
-    the match (unlike predict_match, which walks forward through history).
-
-    Caveat surfaced via confidence_score: our historical dataset stops in
-    May 2025, so this is fit on data up to ~16 months stale relative to the
-    2026-2027 season, and newly-promoted clubs have no history in it at all
-    (they get neutral/default attack-defense-Elo values, not fabricated ones)."""
+def _model_only_prediction(home_team: str, away_team: str) -> dict:
+    """The full-history goals+shots blend (edge_v0.3), BEFORE any market
+    odds are mixed in. Shared by predict_upcoming() and find_value_bets() so
+    both use the exact same independent model, not two slightly different
+    computations of "our prediction"."""
     global _FULL_HISTORY_DC_CACHE, _FULL_HISTORY_ELO_CACHE, _FULL_HISTORY_SHOTS_CACHE
     df = _load_df()
 
@@ -247,6 +242,21 @@ def predict_upcoming(home_team: str, away_team: str) -> dict:
     pred["home_win_prob"], pred["draw_prob"], pred["away_win_prob"] = blend_with_goals(
         (pred["home_win_prob"], pred["draw_prob"], pred["away_win_prob"]), shots_outcome
     )
+    return pred
+
+
+def predict_upcoming(home_team: str, away_team: str) -> dict:
+    """Predicts a genuinely future fixture (from a live fixtures provider),
+    using the model fit on the ENTIRE historical dataset — there is no
+    kickoff cutoff to respect here since nothing in our dataset is after
+    the match (unlike predict_match, which walks forward through history).
+
+    Caveat surfaced via confidence_score: our historical dataset stops in
+    May 2025, so this is fit on data up to ~16 months stale relative to the
+    2026-2027 season, and newly-promoted clubs have no history in it at all
+    (they get neutral/default attack-defense-Elo values, not fabricated ones)."""
+    df = _load_df()
+    pred = _model_only_prediction(home_team, away_team)
 
     home_hist = len(df[(df["HomeTeam"] == home_team) | (df["AwayTeam"] == home_team)])
     away_hist = len(df[(df["HomeTeam"] == away_team) | (df["AwayTeam"] == away_team)])
@@ -308,6 +318,74 @@ def predict_upcoming(home_team: str, away_team: str) -> dict:
         "model_only": model_only,
         "market": market_info,
         **pred,
+    }
+
+
+MIN_VALUE_EDGE = 0.05  # 5 percentage points minimum divergence to be listed at all
+
+
+def find_value_bets(limit: int = 10) -> dict:
+    """Scans upcoming fixtures for outcomes where our INDEPENDENT model
+    (edge_v0.3, goals+shots — never mixed with market odds) diverges most
+    from the real de-vigged market probability.
+
+    IMPORTANT, and shown to the user, not just here: our own backtest
+    (/model/market-comparison) shows this model is LESS accurate than the
+    market on every metric. A large divergence is therefore more likely to
+    be a model error than a genuine market mispricing — this is a
+    "where do model and market disagree most" list, not a verified
+    profitable strategy, and it is never presented as one."""
+    from backend.services import live_fixtures
+
+    try:
+        fixtures = live_fixtures.get_upcoming_fixtures(limit=20)
+    except RuntimeError:
+        return {"note": "Donnée indisponible : calendrier des matchs à venir non accessible.", "candidates": []}
+
+    candidates = []
+    for fx in fixtures:
+        home, away = fx["home_team"], fx["away_team"]
+        market = market_odds.get_market_probs(home, away)
+        if market is None:
+            continue
+        try:
+            model = _model_only_prediction(home, away)
+        except (ValueError, FileNotFoundError):
+            continue
+
+        outcomes = [
+            ("home_win", home, model["home_win_prob"], market["home"]),
+            ("draw", "Nul", model["draw_prob"], market["draw"]),
+            ("away_win", away, model["away_win_prob"], market["away"]),
+        ]
+        for outcome, label, model_prob, market_prob in outcomes:
+            edge = model_prob - market_prob
+            if edge < MIN_VALUE_EDGE:
+                continue
+            candidates.append({
+                "fixture_id": fx["fixture_id"],
+                "home_team": home,
+                "away_team": away,
+                "kickoff_utc": fx["kickoff_utc"],
+                "outcome": outcome,
+                "outcome_label": label,
+                "model_prob": model_prob,
+                "market_prob": market_prob,
+                "market_implied_odds": round(1 / market_prob, 2) if market_prob > 0 else None,
+                "edge": round(edge, 4),
+                "n_bookmakers": market["n_bookmakers"],
+            })
+
+    candidates.sort(key=lambda c: -c["edge"])
+    return {
+        "note": (
+            "Ceci compare notre modèle statistique SEUL (jamais mélangé aux cotes) à la moyenne "
+            "des cotes réelles du marché. Un grand écart signale un désaccord, pas une occasion "
+            "vérifiée : notre backtest montre que ce modèle est globalement MOINS précis que le "
+            "marché (voir Fiabilité). Ce n'est pas un conseil de pari, aucune stratégie ici n'a été "
+            "vérifiée comme rentable, et parier comporte un risque réel de perte d'argent."
+        ),
+        "candidates": candidates[:limit],
     }
 
 

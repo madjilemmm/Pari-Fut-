@@ -124,6 +124,25 @@ export type CalibrationData = {
   reliability_curve: { predicted: number; observed: number }[];
 };
 
+export type ValueBetCandidate = {
+  fixture_id: string;
+  home_team: string;
+  away_team: string;
+  kickoff_utc: string;
+  outcome: "home_win" | "draw" | "away_win";
+  outcome_label: string;
+  model_prob: number;
+  market_prob: number;
+  market_implied_odds: number | null;
+  edge: number;
+  n_bookmakers: number;
+};
+
+export type ValueBets = {
+  note: string;
+  candidates: ValueBetCandidate[];
+};
+
 export type MarketComparison = {
   note: string;
   n_matches: number;
@@ -162,5 +181,6 @@ export const getLeagues = () => fetchJson<League[]>(`/leagues`);
 export const getModelPerformance = () => fetchJson<ModelPerformance>(`/model/performance`);
 export const getCalibration = () => fetchJson<CalibrationData>(`/model/calibration`);
 export const getMarketComparison = () => fetchJson<MarketComparison>(`/model/market-comparison`);
+export const getValueBets = (limit = 10) => fetchJson<ValueBets>(`/value-bets?limit=${limit}`);
 
 export { ApiError };
