@@ -41,6 +41,17 @@ if [ ! -f data/processed/matches.parquet ]; then
     # the real CSVs in data/raw/, which ARE committed.
     echo "Processed matches not found — regenerating from data/raw/*.csv ..."
     python3 -m jobs.ingest_football_data_csv
+
+    # Backfill the 2025-2026 season (missing from the CSV history) with real
+    # results from football-data.org, closing the gap before the current
+    # 2026-2027 season. Best-effort: skipped if the API key isn't configured
+    # rather than failing the whole startup.
+    if [ -n "$FOOTBALL_DATA_API_TOKEN" ]; then
+        echo "Backfilling 2025-2026 season from football-data.org ..."
+        python3 -m jobs.ingest_football_data_org_season 2025 || echo "Backfill failed, continuing with CSV data only."
+    else
+        echo "FOOTBALL_DATA_API_TOKEN not set — skipping 2025-2026 backfill (Donnée indisponible for that season)."
+    fi
 fi
 
 python3 -m jobs.load_matches_to_postgres

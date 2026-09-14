@@ -32,7 +32,9 @@ FOOTBALL_DATA_BASE = "https://api.football-data.org/v4"
 NAME_MAP = {
     "Nottingham": "Nott'm Forest",
     "Brighton Hove": "Brighton",
+    "Wolverhampton": "Wolves",
     "Wolverhampton Wanderers": "Wolves",
+    "Leeds United": "Leeds",
     "West Bromwich Albion": "West Brom",
 }
 
