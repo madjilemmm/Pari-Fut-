@@ -130,13 +130,22 @@ class DixonColesModel:
         away_win = float(np.triu(matrix, 1).sum())
 
         over_2_5 = 0.0
+        over_1_5 = 0.0
         btts = 0.0
+        clean_sheet_home = 0.0  # away scores 0
+        clean_sheet_away = 0.0  # home scores 0
         for i, j in product(range(MAX_GOALS + 1), repeat=2):
             p = matrix[i, j]
             if i + j > 2.5:
                 over_2_5 += p
+            if i + j > 1.5:
+                over_1_5 += p
             if i > 0 and j > 0:
                 btts += p
+            if j == 0:
+                clean_sheet_home += p
+            if i == 0:
+                clean_sheet_away += p
 
         scores = [(f"{i}-{j}", float(matrix[i, j])) for i, j in product(range(MAX_GOALS + 1), repeat=2)]
         top_scores = sorted(scores, key=lambda x: -x[1])[:5]
@@ -148,7 +157,11 @@ class DixonColesModel:
             "home_xg": home_xg,
             "away_xg": away_xg,
             "over_2_5_prob": over_2_5,
+            "under_2_5_prob": 1.0 - over_2_5,
+            "over_1_5_prob": over_1_5,
             "btts_prob": btts,
+            "clean_sheet_home_prob": clean_sheet_home,
+            "clean_sheet_away_prob": clean_sheet_away,
             "top_scores": [{"score": s, "prob": p} for s, p in top_scores],
         }
 

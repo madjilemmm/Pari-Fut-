@@ -134,6 +134,126 @@ def simulate_match(match_id: str) -> dict:
     return result
 
 
+def form_guide(match_id: str) -> dict:
+    """Last 5 finished results before this match's kickoff, for both teams.
+    Real results only — 'V'/'N'/'D' (win/draw/loss) from the team's perspective."""
+    df = _load_df()
+    match = df[df["match_id"] == match_id]
+    if match.empty:
+        raise KeyError(f"match_id {match_id} introuvable")
+    row = match.iloc[0]
+    history = df[df["kickoff_utc"] < row["kickoff_utc"]]
+
+    def team_form(team: str) -> dict:
+        games = history[(history["HomeTeam"] == team) | (history["AwayTeam"] == team)].tail(5)
+        if games.empty:
+            return {"results": [], "avg_goals_for": None, "avg_goals_against": None, "note": "Historique insuffisant"}
+        results = []
+        goals_for, goals_against = [], []
+        for _, g in games.iterrows():
+            is_home = g["HomeTeam"] == team
+            gf = g["FTHG"] if is_home else g["FTAG"]
+            ga = g["FTAG"] if is_home else g["FTHG"]
+            goals_for.append(int(gf))
+            goals_against.append(int(ga))
+            results.append("V" if gf > ga else ("D" if gf < ga else "N"))
+        return {
+            "results": results,
+            "avg_goals_for": round(sum(goals_for) / len(goals_for), 2),
+            "avg_goals_against": round(sum(goals_against) / len(goals_against), 2),
+        }
+
+    return {
+        "home_team": row["HomeTeam"],
+        "away_team": row["AwayTeam"],
+        "home_form": team_form(row["HomeTeam"]),
+        "away_form": team_form(row["AwayTeam"]),
+    }
+
+
+def why_match(match_id: str) -> dict:
+    """Bullet points derived strictly from real model internals (Dixon-Coles
+    attack/defense parameters, Elo ratings, data volume) — never LLM-invented."""
+    df = _load_df()
+    match = df[df["match_id"] == match_id]
+    if match.empty:
+        raise KeyError(f"match_id {match_id} introuvable")
+    row = match.iloc[0]
+    history = df[df["kickoff_utc"] < row["kickoff_utc"]]
+    if len(history) < 20:
+        raise ValueError("Historique insuffisant pour ce match (Donnée indisponible).")
+
+    model = DixonColesModel.fit(history, xi=SELECTED_XI)
+    elo = EloModel.fit(history)
+
+    home, away = row["HomeTeam"], row["AwayTeam"]
+    home_attack = model.attack.get(home, 0.0)
+    away_attack = model.attack.get(away, 0.0)
+    home_defense = model.defense.get(home, 0.0)  # lower = better defense
+    away_defense = model.defense.get(away, 0.0)
+    elo_home, elo_away = elo.rating(home), elo.rating(away)
+
+    home_points, away_points, risks = [], [], []
+
+    if model.home_advantage > 0.05:
+        home_points.append("Avantage domicile mesuré positif pour l'équipe recevante")
+    if home_attack > away_attack + 0.1:
+        home_points.append(f"Meilleure production offensive récente que {away}")
+    if elo_home > elo_away + 30:
+        home_points.append(f"Rating de force (Elo) supérieur : {elo_home:.0f} vs {elo_away:.0f}")
+
+    if away_attack > home_attack + 0.1:
+        away_points.append(f"Meilleure production offensive récente que {home}")
+    if elo_away > elo_home + 30:
+        away_points.append(f"Rating de force (Elo) supérieur : {elo_away:.0f} vs {elo_home:.0f}")
+    if away_defense < home_defense - 0.1:
+        away_points.append("Défense plus solide sur les matchs récents")
+    if home_defense < away_defense - 0.1:
+        home_points.append("Défense plus solide sur les matchs récents")
+
+    home_hist = len(history[(history["HomeTeam"] == home) | (history["AwayTeam"] == home)])
+    away_hist = len(history[(history["HomeTeam"] == away) | (history["AwayTeam"] == away)])
+    if min(home_hist, away_hist) < 15:
+        risks.append("Historique encore limité pour l'une des deux équipes — incertitude plus élevée")
+    risks.append("Compositions, blessures et absences non prises en compte (données non connectées)")
+
+    return {
+        "home_team": home,
+        "away_team": away,
+        "home_points": home_points,
+        "away_points": away_points,
+        "risks": risks,
+    }
+
+
+def power_rating(match_id: str) -> dict:
+    """0-100 power rating = percentile rank of each team's current Elo among
+    all teams active in the league at that point in time. Derived directly
+    from the real Elo model — not a separately invented number."""
+    df = _load_df()
+    match = df[df["match_id"] == match_id]
+    if match.empty:
+        raise KeyError(f"match_id {match_id} introuvable")
+    row = match.iloc[0]
+    history = df[df["kickoff_utc"] < row["kickoff_utc"]]
+    elo = EloModel.fit(history)
+
+    all_ratings = sorted(elo.ratings.values())
+    if len(all_ratings) < 5:
+        raise ValueError("Historique insuffisant pour un power rating fiable (Donnée indisponible).")
+
+    def percentile(value: float) -> float:
+        below = sum(1 for r in all_ratings if r <= value)
+        return round(100 * below / len(all_ratings), 1)
+
+    return {
+        "home_team": row["HomeTeam"],
+        "away_team": row["AwayTeam"],
+        "home_power": percentile(elo.rating(row["HomeTeam"])),
+        "away_power": percentile(elo.rating(row["AwayTeam"])),
+    }
+
+
 def elo_ratings_snapshot(as_of_match_id: str) -> dict:
     df = _load_df()
     match = df[df["match_id"] == as_of_match_id]
