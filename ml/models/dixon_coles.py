@@ -28,7 +28,8 @@ MAX_GOALS = 8
 
 
 def _tau(home_goals: int, away_goals: int, home_xg: float, away_xg: float, rho: float) -> float:
-    """Dixon-Coles low-score adjustment factor."""
+    """Dixon-Coles low-score adjustment factor (scalar version, used for the
+    2x2 score-matrix correction in predict())."""
     if home_goals == 0 and away_goals == 0:
         return 1 - home_xg * away_xg * rho
     if home_goals == 0 and away_goals == 1:
@@ -38,6 +39,24 @@ def _tau(home_goals: int, away_goals: int, home_xg: float, away_xg: float, rho: 
     if home_goals == 1 and away_goals == 1:
         return 1 - rho
     return 1.0
+
+
+def _tau_vectorized(home_goals: np.ndarray, away_goals: np.ndarray, lam: np.ndarray, mu: np.ndarray, rho: float) -> np.ndarray:
+    """Same formula as _tau, applied to whole arrays at once with numpy —
+    mathematically identical, but avoids a per-row Python-level function call
+    for every one of the ~6000+ likelihood evaluations the optimizer makes,
+    which was the actual bottleneck (each fit took ~9s dominated by this
+    Python loop, not by scipy's optimizer itself)."""
+    tau = np.ones_like(lam)
+    mask_00 = (home_goals == 0) & (away_goals == 0)
+    mask_01 = (home_goals == 0) & (away_goals == 1)
+    mask_10 = (home_goals == 1) & (away_goals == 0)
+    mask_11 = (home_goals == 1) & (away_goals == 1)
+    tau[mask_00] = 1 - lam[mask_00] * mu[mask_00] * rho
+    tau[mask_01] = 1 + lam[mask_01] * rho
+    tau[mask_10] = 1 + mu[mask_10] * rho
+    tau[mask_11] = 1 - rho
+    return tau
 
 
 @dataclass
@@ -81,9 +100,7 @@ class DixonColesModel:
             log_pmf_home = hg * np.log(lam) - lam - _log_factorial(hg)
             log_pmf_away = ag * np.log(mu) - mu - _log_factorial(ag)
 
-            tau_vals = np.array([
-                _tau(int(h), int(a), lam[i], mu[i], rho) for i, (h, a) in enumerate(zip(hg, ag))
-            ])
+            tau_vals = _tau_vectorized(hg, ag, lam, mu, rho)
             tau_vals = np.clip(tau_vals, 1e-10, None)
 
             log_lik = log_pmf_home + log_pmf_away + np.log(tau_vals)

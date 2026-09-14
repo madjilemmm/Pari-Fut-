@@ -7,6 +7,8 @@ rather than inventing a value.
 """
 from __future__ import annotations
 
+import threading
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -20,6 +22,13 @@ app.add_middleware(
     allow_methods=["GET"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def _warm_prediction_cache() -> None:
+    # Runs in a background thread so /health responds immediately even while
+    # the (slow, on constrained hosts) model fits are still warming up.
+    threading.Thread(target=prediction_service.warm_cache, kwargs={"limit": 40}, daemon=True).start()
 
 
 @app.get("/matches")

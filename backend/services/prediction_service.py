@@ -55,6 +55,24 @@ def _fit_elo_for(match_id: str, history: pd.DataFrame) -> EloModel:
     return _elo_cache[match_id]
 
 
+def warm_cache(limit: int = 40) -> None:
+    """Pre-fits every match_id the UI can actually reach (home + archives both
+    cap at 40) at process startup, so no user request ever blocks on a cold
+    Dixon-Coles fit. The free-tier host's CPU is slow enough that a single
+    on-demand fit can take long enough to make the health check time out and
+    get the whole container restarted — this runs once in the background
+    instead, well before real traffic needs it."""
+    try:
+        for m in list_matches(limit=limit):
+            try:
+                predict_match(m["match_id"])
+                why_match(m["match_id"])
+            except Exception:
+                continue
+    except Exception:
+        pass  # DB not ready yet at import time is fine; requests will fit on demand.
+
+
 def _load_df() -> pd.DataFrame:
     global _df
     if _df is None:
