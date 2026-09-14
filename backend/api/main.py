@@ -7,8 +7,6 @@ rather than inventing a value.
 """
 from __future__ import annotations
 
-import threading
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -23,12 +21,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.on_event("startup")
-def _warm_prediction_cache() -> None:
-    # Runs in a background thread so /health responds immediately even while
-    # the (slow, on constrained hosts) model fits are still warming up.
-    threading.Thread(target=prediction_service.warm_cache, kwargs={"limit": 40}, daemon=True).start()
+# NOTE: an eager background cache warm-up (fitting every reachable match at
+# startup) was tried here and reverted — on a single shared free-tier CPU,
+# ~40 sequential model fits running in a background thread competed for the
+# same core as live requests and made things WORSE (live requests hung
+# instead of just being slow). Per-match_id caching in prediction_service
+# still applies lazily on first request, which is the safe version of this.
 
 
 @app.get("/matches")
