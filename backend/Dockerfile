@@ -10,4 +10,5 @@ COPY ml/ ml/
 COPY jobs/ jobs/
 COPY data/ data/
 
-CMD ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+RUN chmod +x backend/entrypoint.sh
+CMD ["backend/entrypoint.sh"]
