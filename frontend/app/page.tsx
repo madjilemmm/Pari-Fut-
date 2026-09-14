@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { getLeagues, getMatches, getModelPerformance, getPrediction, ApiError } from "@/lib/api";
-import { MatchCard } from "@/components/MatchCard";
+import { getLeagues, getMatches, getModelPerformance, ApiError } from "@/lib/api";
+import { LiveMatchCard } from "@/components/LiveMatchCard";
 import { ErrorCard, EmptyState } from "@/components/ErrorCard";
 
 export const dynamic = "force-dynamic";
@@ -8,11 +8,9 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   let leagues, matches, modelPerf;
   try {
-    // Kept small on purpose: each match below triggers a real model fit
-    // server-side (a few seconds on the free-tier backend). More matches
-    // here means more fetch time on this page — see docs/PHASE1_STATUS.md
-    // for the plan to move this to a scheduled job once a real DB layer for
-    // precomputed predictions exists.
+    // Only the fast, DB-backed metadata is fetched server-side. Predictions
+    // load client-side (LiveMatchCard) since a cold model fit can take
+    // longer than Vercel's serverless function limit — see that component.
     [leagues, matches, modelPerf] = await Promise.all([getLeagues(), getMatches(3), getModelPerformance()]);
   } catch (e) {
     return <ErrorCard message={e instanceof ApiError ? e.message : "Erreur inattendue."} />;
@@ -20,11 +18,6 @@ export default async function HomePage() {
 
   const featured = matches[matches.length - 1];
   const others = matches.slice(0, matches.length - 1).reverse();
-
-  const [featuredPred, ...otherPreds] = await Promise.all([
-    getPrediction(featured.match_id).catch(() => undefined),
-    ...others.map((m) => getPrediction(m.match_id).catch(() => undefined)),
-  ]);
 
   return (
     <div className="space-y-10">
@@ -54,7 +47,7 @@ export default async function HomePage() {
       {/* Featured match */}
       <section>
         <h2 className="text-sm uppercase tracking-wide text-terminal-muted mb-3">Dernier match analysé</h2>
-        <MatchCard match={featured} prediction={featuredPred} featured />
+        <LiveMatchCard match={featured} featured />
       </section>
 
       {/* Other matches */}
@@ -62,8 +55,8 @@ export default async function HomePage() {
         <section>
           <h2 className="text-sm uppercase tracking-wide text-terminal-muted mb-3">Autres analyses</h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            {others.map((m, i) => (
-              <MatchCard key={m.match_id} match={m} prediction={otherPreds[i]} />
+            {others.map((m) => (
+              <LiveMatchCard key={m.match_id} match={m} />
             ))}
           </div>
         </section>
