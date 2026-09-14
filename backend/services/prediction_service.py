@@ -212,12 +212,16 @@ def predict_upcoming(home_team: str, away_team: str) -> dict:
     }
     market_info = None
     if market is not None:
-        # Blend weight is a documented judgment call, not fit on test data:
-        # our own backtest (ml/evaluation/compare_vs_market.py) shows the
-        # market beats our independent model on every metric, so it gets
-        # more weight in the blend. This is disclosed to the user, not
-        # presented as an independent model result.
-        MARKET_WEIGHT = 0.70
+        # Blend weight found by ml/evaluation/optimize_market_blend.py: the
+        # weight minimizing Log Loss on a held-out VALIDATION season
+        # (2022-2023), never touched using test-set information. The
+        # validation-optimal weight hit the search boundary at 1.00 (100%
+        # market) on every season checked — our independent model adds no
+        # measurable value once real market odds are available. We keep a
+        # small 5% floor for the model rather than ship the literal boundary
+        # solution (which would make "model" purely cosmetic), disclosed to
+        # the user either way.
+        MARKET_WEIGHT = 0.95
         blended_home = MARKET_WEIGHT * market["home"] + (1 - MARKET_WEIGHT) * pred["home_win_prob"]
         blended_draw = MARKET_WEIGHT * market["draw"] + (1 - MARKET_WEIGHT) * pred["draw_prob"]
         blended_away = MARKET_WEIGHT * market["away"] + (1 - MARKET_WEIGHT) * pred["away_win_prob"]

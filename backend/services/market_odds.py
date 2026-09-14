@@ -49,7 +49,7 @@ def get_market_probs(home_team: str, away_team: str) -> dict | None:
     try:
         resp = httpx.get(
             f"{ODDS_API_BASE}/sports/{SPORT_KEY}/odds",
-            params={"apiKey": api_key, "regions": "eu", "markets": "h2h", "oddsFormat": "decimal"},
+            params={"apiKey": api_key, "regions": "eu,uk", "markets": "h2h", "oddsFormat": "decimal"},
             timeout=10.0,
         )
         resp.raise_for_status()
