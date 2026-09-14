@@ -20,18 +20,29 @@ silent omission.
 """
 from __future__ import annotations
 
+import os
+
 import pandas as pd
 
 from backend.db.connection import engine
 from backend.services import market_odds
 from ml.models.dixon_coles import DixonColesModel
 from ml.models.elo import EloModel
+from ml.models.shots_model import ShotsModel, blend_with_goals
 from ml.simulations.monte_carlo import simulate
 
-MODEL_VERSION = "edge_v0.2_dixon_coles"
+MODEL_VERSION = "edge_v0.3_shots_goals_blend"
 SELECTED_XI = 0.005  # chosen via validation grid search, see ml/evaluation/backtest_dixon_coles.py
 
+# Shots-on-target (HST/AST) aren't loaded into Postgres (only goals are —
+# see _load_df's query), so they're read once from the same parquet file
+# jobs/load_matches_to_postgres.py sourced the DB from, then merged onto
+# whatever history slice is being fit. This is enrichment on an already-
+# trusted historical dataset, not a second source of truth for match results.
+SHOTS_PARQUET_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "processed", "matches.parquet")
+
 _df: pd.DataFrame | None = None
+_shots_df: pd.DataFrame | None = None
 
 # The historical dataset is immutable for the lifetime of the process, so the
 # fitted model for a given match_id is always the same. Several endpoints
@@ -42,6 +53,7 @@ _df: pd.DataFrame | None = None
 # Caching by match_id removes the redundant work without changing any number.
 _dc_cache: dict[str, DixonColesModel] = {}
 _elo_cache: dict[str, EloModel] = {}
+_shots_cache: dict[str, ShotsModel | None] = {}
 
 
 def _fit_dixon_coles_for(match_id: str, history: pd.DataFrame) -> DixonColesModel:
@@ -54,6 +66,34 @@ def _fit_elo_for(match_id: str, history: pd.DataFrame) -> EloModel:
     if match_id not in _elo_cache:
         _elo_cache[match_id] = EloModel.fit(history)
     return _elo_cache[match_id]
+
+
+def _load_shots_df() -> pd.DataFrame:
+    global _shots_df
+    if _shots_df is None:
+        try:
+            raw = pd.read_parquet(SHOTS_PARQUET_PATH)
+            raw["kickoff_date"] = pd.to_datetime(raw["kickoff_utc"]).dt.normalize()
+            _shots_df = raw[["HomeTeam", "AwayTeam", "kickoff_date", "HST", "AST"]]
+        except Exception:
+            _shots_df = pd.DataFrame(columns=["HomeTeam", "AwayTeam", "kickoff_date", "HST", "AST"])
+    return _shots_df
+
+
+def _with_shots(history: pd.DataFrame) -> pd.DataFrame:
+    shots = _load_shots_df()
+    h = history.copy()
+    kickoff = h["kickoff_utc"]
+    if kickoff.dt.tz is not None:
+        kickoff = kickoff.dt.tz_localize(None)
+    h["kickoff_date"] = kickoff.dt.normalize()
+    return h.merge(shots, on=["HomeTeam", "AwayTeam", "kickoff_date"], how="left")
+
+
+def _fit_shots_for(match_id: str, history: pd.DataFrame) -> ShotsModel | None:
+    if match_id not in _shots_cache:
+        _shots_cache[match_id] = ShotsModel.fit(_with_shots(history))
+    return _shots_cache[match_id]
 
 
 
@@ -135,6 +175,12 @@ def predict_match(match_id: str) -> dict:
     model = _fit_dixon_coles_for(match_id, history)
     pred = model.predict(row["HomeTeam"], row["AwayTeam"])
 
+    shots_model = _fit_shots_for(match_id, history)
+    shots_outcome = shots_model.predict_outcome(row["HomeTeam"], row["AwayTeam"]) if shots_model else None
+    pred["home_win_prob"], pred["draw_prob"], pred["away_win_prob"] = blend_with_goals(
+        (pred["home_win_prob"], pred["draw_prob"], pred["away_win_prob"]), shots_outcome
+    )
+
     home_hist = len(history[(history["HomeTeam"] == row["HomeTeam"]) | (history["AwayTeam"] == row["HomeTeam"])])
     away_hist = len(history[(history["HomeTeam"] == row["AwayTeam"]) | (history["AwayTeam"] == row["AwayTeam"])])
     confidence, note = _confidence_score(home_hist, away_hist)
@@ -152,6 +198,7 @@ def predict_match(match_id: str) -> dict:
 
 _FULL_HISTORY_DC_CACHE: DixonColesModel | None = None
 _FULL_HISTORY_ELO_CACHE: EloModel | None = None
+_FULL_HISTORY_SHOTS_CACHE: ShotsModel | None = None
 
 
 def warm_full_history_model() -> None:
@@ -161,11 +208,12 @@ def warm_full_history_model() -> None:
     many matches — safe to run eagerly at startup, unlike the per-match
     walk-forward warm-up that was tried and reverted earlier for
     overloading the free-tier CPU."""
-    global _FULL_HISTORY_DC_CACHE, _FULL_HISTORY_ELO_CACHE
+    global _FULL_HISTORY_DC_CACHE, _FULL_HISTORY_ELO_CACHE, _FULL_HISTORY_SHOTS_CACHE
     try:
         df = _load_df()
         _FULL_HISTORY_DC_CACHE = DixonColesModel.fit(df, xi=SELECTED_XI)
         _FULL_HISTORY_ELO_CACHE = EloModel.fit(df)
+        _FULL_HISTORY_SHOTS_CACHE = ShotsModel.fit(_with_shots(df))
     except Exception:
         pass  # DB not ready yet at startup is fine; predict_upcoming() will fit lazily.
 
@@ -180,16 +228,25 @@ def predict_upcoming(home_team: str, away_team: str) -> dict:
     May 2025, so this is fit on data up to ~16 months stale relative to the
     2026-2027 season, and newly-promoted clubs have no history in it at all
     (they get neutral/default attack-defense-Elo values, not fabricated ones)."""
-    global _FULL_HISTORY_DC_CACHE, _FULL_HISTORY_ELO_CACHE
+    global _FULL_HISTORY_DC_CACHE, _FULL_HISTORY_ELO_CACHE, _FULL_HISTORY_SHOTS_CACHE
     df = _load_df()
 
     if _FULL_HISTORY_DC_CACHE is None:
         _FULL_HISTORY_DC_CACHE = DixonColesModel.fit(df, xi=SELECTED_XI)
     if _FULL_HISTORY_ELO_CACHE is None:
         _FULL_HISTORY_ELO_CACHE = EloModel.fit(df)
+    if _FULL_HISTORY_SHOTS_CACHE is None:
+        _FULL_HISTORY_SHOTS_CACHE = ShotsModel.fit(_with_shots(df))
 
     model = _FULL_HISTORY_DC_CACHE
     pred = model.predict(home_team, away_team)
+
+    shots_outcome = (
+        _FULL_HISTORY_SHOTS_CACHE.predict_outcome(home_team, away_team) if _FULL_HISTORY_SHOTS_CACHE else None
+    )
+    pred["home_win_prob"], pred["draw_prob"], pred["away_win_prob"] = blend_with_goals(
+        (pred["home_win_prob"], pred["draw_prob"], pred["away_win_prob"]), shots_outcome
+    )
 
     home_hist = len(df[(df["HomeTeam"] == home_team) | (df["AwayTeam"] == home_team)])
     away_hist = len(df[(df["HomeTeam"] == away_team) | (df["AwayTeam"] == away_team)])

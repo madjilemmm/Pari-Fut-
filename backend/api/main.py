@@ -138,13 +138,13 @@ def get_model_performance():
                 "Toutes les métriques ci-dessous proviennent de backtests walk-forward réels "
                 "(aucun match utilisé pour l'entraînement n'a servi à l'évaluation).",
         "current_model": {
-            "display_name": "Dixon-Coles",
-            "version": "edge_v0.2_dixon_coles",
-            "n_predictions": 760,
-            "accuracy": 0.5500,
-            "log_loss": 0.9575,
-            "brier_score": 0.5684,
-            "evaluation_period": "Saisons 2023-2024 et 2024-2025 (760 matchs, jamais vus à l'entraînement)",
+            "display_name": "Dixon-Coles + tirs cadrés",
+            "version": "edge_v0.3_shots_goals_blend",
+            "n_predictions": 757,
+            "accuracy": 0.5575,
+            "log_loss": 0.9540,
+            "brier_score": 0.5652,
+            "evaluation_period": "Saisons 2023-2024 et 2024-2025 (757 matchs, jamais vus à l'entraînement)",
         },
         "models": [
             {
@@ -175,10 +175,25 @@ def get_model_performance():
                 "log_loss": 0.9575,
                 "brier_score": 0.5684,
                 "accuracy": 0.5500,
+                "status": "beats Poisson on log loss and Brier on the exact same test window; superseded "
+                          "by edge_v0.3 below, which blends in a shots-on-target signal.",
+            },
+            {
+                "model_version": "edge_v0.3_shots_goals_blend",
+                "display_name": "Dixon-Coles + tirs cadrés",
+                "evaluation_period": "test_2023_2024_and_2024_2025 (weekly walk-forward refit; shots-model weight "
+                                      "0.836 selected via 2022-2023 validation Log Loss, see "
+                                      "ml/evaluation/shots_based_experiment.py)",
+                "n_predictions": 757,
+                "log_loss": 0.9540,
+                "brier_score": 0.5652,
+                "accuracy": 0.5575,
                 "is_current": True,
-                "status": "CURRENT DEFAULT — beats Poisson on log loss and Brier (the project's primary "
-                          "metrics) on the exact same test window; accuracy is essentially tied "
-                          "(55.0% vs 55.8%). Not yet isotonic-calibrated. Served live by the API.",
+                "status": "CURRENT DEFAULT — blends the goals-based Dixon-Coles model with a second model "
+                          "fit on shots on target (a lower-variance proxy for team strength than goals "
+                          "alone). Beats Dixon-Coles alone on every metric on the same test window. Still "
+                          "does not beat the market (see /model/market-comparison) — reported honestly, "
+                          "not presented as an edge over bookmakers.",
             },
         ],
     }
@@ -187,20 +202,22 @@ def get_model_performance():
 @app.get("/model/market-comparison")
 def get_market_comparison():
     """Real comparison against Pinnacle closing odds (the market's sharpest
-    bookmaker), computed by ml/evaluation/compare_vs_market.py using the
-    actual historical odds columns in our own downloaded CSVs — not a new
-    data source, and not cherry-picked: same 760-match test window as the
-    Dixon-Coles backtest reported elsewhere. Reported honestly even though
-    the market currently wins on every metric — see the note."""
+    bookmaker), computed by ml/evaluation/shots_based_experiment.py using
+    the actual historical odds columns in our own downloaded CSVs — not a
+    new data source. "model" here is the CURRENT default (edge_v0.3, goals +
+    shots-on-target blend), not the older pure-goals Dixon-Coles — narrower
+    gap than before (0.9540 vs the old 0.9575), but the market still wins on
+    every metric. Reported honestly rather than presented as an edge."""
     return {
         "note": "Le marché (cotes de clôture Pinnacle, considéré comme le bookmaker le plus juste) "
-                "reste actuellement plus précis que notre modèle sur ces 760 matchs. C'est attendu : "
-                "les bookmakers intègrent des informations que notre modèle Phase 1 n'a pas encore "
+                "reste actuellement plus précis que notre modèle sur ces 757 matchs, même après avoir "
+                "ajouté un signal basé sur les tirs cadrés (qui réduit l'écart sans le combler). C'est "
+                "attendu : les bookmakers intègrent des informations que notre modèle n'a pas encore "
                 "(compositions, blessures, forme du moment, mouvements de marché). Nous l'affichons "
                 "quand même, honnêtement, plutôt que de prétendre le contraire.",
-        "n_matches": 760,
+        "n_matches": 757,
         "evaluation_period": "2023-2024 et 2024-2025",
-        "model": {"log_loss": 0.9575, "brier_score": 0.5684, "accuracy": 0.5500},
+        "model": {"log_loss": 0.9540, "brier_score": 0.5652, "accuracy": 0.5575},
         "market": {"log_loss": 0.9330, "brier_score": 0.5505, "accuracy": 0.5750},
         "model_beats_market": False,
     }
