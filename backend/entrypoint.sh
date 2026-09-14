@@ -35,6 +35,14 @@ finally:
     conn.close()
 PYEOF
 
+if [ ! -f data/processed/matches.parquet ]; then
+    # data/processed/*.parquet is gitignored (it's a derived artifact), so on a
+    # fresh clone (like this container's image) it must be regenerated from
+    # the real CSVs in data/raw/, which ARE committed.
+    echo "Processed matches not found — regenerating from data/raw/*.csv ..."
+    python3 -m jobs.ingest_football_data_csv
+fi
+
 python3 -m jobs.load_matches_to_postgres
 
 exec uvicorn backend.api.main:app --host 0.0.0.0 --port "${PORT:-8000}"
