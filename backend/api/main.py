@@ -72,16 +72,16 @@ def get_model_performance():
         "models": [
             {
                 "model_version": "edge_v0.1_poisson",
-                "evaluation_period": "test_2022_2023_to_2024_2025 (weekly walk-forward refit)",
-                "n_predictions": 1140,
-                "log_loss": 1.1215,
-                "brier_score": 0.5983,
-                "accuracy": 0.5377,
+                "evaluation_period": "test_2023_2024_and_2024_2025 (weekly walk-forward refit)",
+                "n_predictions": 760,
+                "log_loss": 0.9793,
+                "brier_score": 0.5817,
+                "accuracy": 0.5579,
                 "status": "baseline",
             },
             {
                 "model_version": "edge_v0.1_poisson_isotonic_calibrated",
-                "evaluation_period": "held-out 30% slice of the backtest above",
+                "evaluation_period": "held-out 30% chronological slice of the wider 2022-2025 backtest",
                 "n_predictions": 342,
                 "log_loss": 0.6297,
                 "brier_score": 0.2202,
@@ -90,12 +90,14 @@ def get_model_performance():
             },
             {
                 "model_version": "edge_v0.2_dixon_coles",
-                "status": "validation-only so far — xi=0.005 selected via grid search on 2022-2023 "
-                          "(log_loss=1.0629, beats Poisson's naive reference). Full walk-forward TEST-set "
-                          "backtest (2023-2025) did not finish in time for this run: weekly MLE refits are "
-                          "far slower than the closed-form Poisson. Currently serves live predictions in "
-                          "the API without a completed out-of-sample TEST score yet — flagged here rather "
-                          "than presented as backtested.",
+                "evaluation_period": "test_2023_2024_and_2024_2025 (weekly walk-forward refit, xi=0.005 selected via 2022-2023 validation)",
+                "n_predictions": 760,
+                "log_loss": 0.9575,
+                "brier_score": 0.5684,
+                "accuracy": 0.5500,
+                "status": "CURRENT DEFAULT — beats Poisson on log loss and Brier (the project's primary "
+                          "metrics) on the exact same test window; accuracy is essentially tied "
+                          "(55.0% vs 55.8%). Not yet isotonic-calibrated. Served live by the API.",
             },
         ],
     }

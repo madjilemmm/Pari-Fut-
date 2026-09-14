@@ -67,11 +67,22 @@ calibrée : c'est précisément pour cela que Dixon-Coles puis la calibration
 - **Page Model Performance** ajoutée au frontend (`/model-performance`), branchée
   sur `GET /model/performance` qui expose maintenant Poisson brut, Poisson calibré
   et le statut (encore incomplet) de Dixon-Coles.
-- **Dixon-Coles TEST backtest** (2023-2025) n'a pas pu être terminé dans le temps
-  imparti : le MLE hebdomadaire est nettement plus lent que le Poisson en forme
-  fermée. Le modèle sert déjà des prédictions live dans l'API (xi=0.005 choisi par
-  validation), mais **sans score de test hors échantillon complet** — annoncé tel
-  quel dans `/model/performance`, jamais présenté comme validé.
+- **Dixon-Coles TEST backtest COMPLET** (2023-2024 + 2024-2025, 760 matchs,
+  walk-forward hebdomadaire, xi=0.005 choisi par validation sur 2022-2023) :
+  terminé. Comparaison honnête sur exactement la même fenêtre que le Poisson :
+
+  | Modèle | Log Loss | Brier | Accuracy |
+  |---|---|---|---|
+  | Poisson (edge_v0.1) | 0.9793 | 0.5817 | 55.79% |
+  | Dixon-Coles (edge_v0.2) | **0.9575** | **0.5684** | 55.00% |
+
+  Dixon-Coles gagne sur les deux métriques primaires du projet (Log Loss, Brier),
+  l'accuracy est quasi identique (léger avantage Poisson, non significatif sur
+  760 matchs). **Dixon-Coles devient donc le modèle par défaut** (déjà branché
+  dans l'API). Ni l'un ni l'autre n'est encore calibré (isotonic) sur cette
+  fenêtre précise — la calibration actuelle a été faite sur le Poisson et une
+  fenêtre différente ; refaire la calibration sur Dixon-Coles est la suite
+  logique.
 - **PostgreSQL** : le schéma existe mais l'application tourne encore entièrement
   sur fichiers parquet locaux. Le branchement réel de Postgres (ingestion via
   SQLAlchemy, jobs d'écriture) reste à faire — prochaine étape technique prioritaire
