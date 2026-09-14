@@ -23,6 +23,7 @@ from __future__ import annotations
 import pandas as pd
 
 from backend.db.connection import engine
+from backend.services import market_odds
 from ml.models.dixon_coles import DixonColesModel
 from ml.models.elo import EloModel
 from ml.simulations.monte_carlo import simulate
@@ -203,12 +204,48 @@ def predict_upcoming(home_team: str, away_team: str) -> dict:
     elif home_hist < 40 or away_hist < 40:
         note += " Nos données s'arrêtent en mai 2025 : la saison 2025-2026 n'est pas encore intégrée."
 
+    market = market_odds.get_market_probs(home_team, away_team)
+    model_only = {
+        "home_win_prob": pred["home_win_prob"],
+        "draw_prob": pred["draw_prob"],
+        "away_win_prob": pred["away_win_prob"],
+    }
+    market_info = None
+    if market is not None:
+        # Blend weight is a documented judgment call, not fit on test data:
+        # our own backtest (ml/evaluation/compare_vs_market.py) shows the
+        # market beats our independent model on every metric, so it gets
+        # more weight in the blend. This is disclosed to the user, not
+        # presented as an independent model result.
+        MARKET_WEIGHT = 0.70
+        blended_home = MARKET_WEIGHT * market["home"] + (1 - MARKET_WEIGHT) * pred["home_win_prob"]
+        blended_draw = MARKET_WEIGHT * market["draw"] + (1 - MARKET_WEIGHT) * pred["draw_prob"]
+        blended_away = MARKET_WEIGHT * market["away"] + (1 - MARKET_WEIGHT) * pred["away_win_prob"]
+        total = blended_home + blended_draw + blended_away
+        pred["home_win_prob"] = blended_home / total
+        pred["draw_prob"] = blended_draw / total
+        pred["away_win_prob"] = blended_away / total
+        market_info = {
+            "market_home_prob": market["home"], "market_draw_prob": market["draw"], "market_away_prob": market["away"],
+            "n_bookmakers": market["n_bookmakers"],
+            "blend_weight_market": MARKET_WEIGHT,
+        }
+        confidence = min(100.0, confidence + 15.0)
+        note = (
+            f"Probabilités mélangées : {int(MARKET_WEIGHT*100)}% cotes réelles du marché "
+            f"({market['n_bookmakers']} bookmakers), {int((1-MARKET_WEIGHT)*100)}% notre modèle statistique. "
+            "Notre modèle seul ne bat pas encore le marché (voir page Fiabilité) — ce mélange se rapproche "
+            "du marché plutôt que de prétendre le battre."
+        )
+
     return {
         "home_team": home_team,
         "away_team": away_team,
         "model_version": MODEL_VERSION,
         "confidence_score": confidence,
         "confidence_note": note,
+        "model_only": model_only,
+        "market": market_info,
         **pred,
     }
 

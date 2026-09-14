@@ -61,6 +61,36 @@ export function FixtureDetailClient({ home, away }: { home: string; away: string
         />
       </section>
 
+      {pred.market && (
+        <section className="rounded-xl2 border border-terminal-accent/40 bg-terminal-panel p-6">
+          <h2 className="text-sm uppercase tracking-wide text-terminal-accent mb-1">
+            Cotes réelles du marché intégrées
+          </h2>
+          <p className="text-[11px] text-terminal-muted mb-4">
+            {pred.market.n_bookmakers} bookmaker{pred.market.n_bookmakers > 1 ? "s" : ""} · probabilités mélangées :{" "}
+            {Math.round(pred.market.blend_weight_market * 100)}% marché / {Math.round((1 - pred.market.blend_weight_market) * 100)}% notre modèle statistique.
+            Notre modèle seul ne bat pas encore le marché (voir page Fiabilité).
+          </p>
+          <div className="grid grid-cols-3 gap-3 text-center text-xs">
+            <div>
+              <div className="text-terminal-muted mb-1">{pred.home_team}</div>
+              <div className="font-semibold">{pct(pred.market.market_home_prob)}</div>
+              {pred.model_only && <div className="text-terminal-muted">(modèle seul : {pct(pred.model_only.home_win_prob)})</div>}
+            </div>
+            <div>
+              <div className="text-terminal-muted mb-1">Nul</div>
+              <div className="font-semibold">{pct(pred.market.market_draw_prob)}</div>
+              {pred.model_only && <div className="text-terminal-muted">(modèle seul : {pct(pred.model_only.draw_prob)})</div>}
+            </div>
+            <div>
+              <div className="text-terminal-muted mb-1">{pred.away_team}</div>
+              <div className="font-semibold">{pct(pred.market.market_away_prob)}</div>
+              {pred.model_only && <div className="text-terminal-muted">(modèle seul : {pct(pred.model_only.away_win_prob)})</div>}
+            </div>
+          </div>
+        </section>
+      )}
+
       <div className="grid sm:grid-cols-3 gap-4">
         <div className="rounded-xl2 border border-terminal-border bg-terminal-panel p-5">
           <div className="text-xs uppercase tracking-wide text-terminal-muted mb-2">Buts attendus (xG)</div>

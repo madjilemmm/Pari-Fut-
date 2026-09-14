@@ -21,4 +21,10 @@ services:
       # will prompt for it in the dashboard rather than storing it in git.
       - key: FOOTBALL_DATA_API_TOKEN
         sync: false
+      # The Odds API free-tier key (500 req/month) for real live bookmaker
+      # odds, blended into fixture predictions in prediction_service.py.
+      # sync: false means Render will prompt for it in the dashboard rather
+      # than storing it in git.
+      - key: ODDS_API_KEY
+        sync: false
     healthCheckPath: /health

@@ -29,6 +29,18 @@ export type MatchPrediction = {
   top_scores: ScoreProb[];
   confidence_score: number;
   confidence_note: string;
+  model_only?: {
+    home_win_prob: number;
+    draw_prob: number;
+    away_win_prob: number;
+  };
+  market?: {
+    market_home_prob: number;
+    market_draw_prob: number;
+    market_away_prob: number;
+    n_bookmakers: number;
+    blend_weight_market: number;
+  } | null;
 };
 
 export type WhyMatch = {
