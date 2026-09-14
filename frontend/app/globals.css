@@ -3,6 +3,39 @@
 @tailwind utilities;
 
 body {
-  background-color: #0a0e14;
-  color: #e6ebf1;
+  background-color: #05070d;
+  color: #e8edf4;
+  font-feature-settings: "tnum" 1;
+}
+
+@keyframes fadein {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadein 0.35s ease-out both;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #0d1420 25%, #16202f 37%, #0d1420 63%);
+  background-size: 400% 100%;
+  animation: skeleton-loading 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-loading {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+.prob-bar {
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card-hover {
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+.card-hover:hover {
+  border-color: #2ee6a6;
+  transform: translateY(-1px);
 }
