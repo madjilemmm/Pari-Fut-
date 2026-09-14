@@ -1,4 +1,4 @@
-import { getModelPerformance, getCalibration, ApiError } from "@/lib/api";
+import { getModelPerformance, getCalibration, getMarketComparison, ApiError } from "@/lib/api";
 import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
 
@@ -59,9 +59,9 @@ function ComparisonBar({ label, poisson, dixonColes, lowerIsBetter = true }: { l
 }
 
 export default async function ModelPerformancePage() {
-  let perf, calibration;
+  let perf, calibration, market;
   try {
-    [perf, calibration] = await Promise.all([getModelPerformance(), getCalibration()]);
+    [perf, calibration, market] = await Promise.all([getModelPerformance(), getCalibration(), getMarketComparison()]);
   } catch (e) {
     return <ErrorCard message={e instanceof ApiError ? e.message : "Erreur inattendue."} />;
   }
@@ -101,6 +101,43 @@ export default async function ModelPerformancePage() {
           <p className="text-xs text-terminal-muted pt-2 border-t border-terminal-border">{dixonColes.status}</p>
         </section>
       )}
+
+      <section className={`rounded-xl2 border p-6 space-y-4 ${market.model_beats_market ? "border-terminal-accent/40 bg-terminal-accent/5" : "border-terminal-border bg-terminal-panel"}`}>
+        <h2 className="text-sm uppercase tracking-wide text-terminal-muted">Modèle vs marché (cotes Pinnacle)</h2>
+        <p className="text-sm text-terminal-muted">{market.note}</p>
+        <div className="grid grid-cols-3 gap-4 text-center text-sm">
+          <div>
+            <div className="text-xs text-terminal-muted mb-1">Log Loss</div>
+            <div className={market.model.log_loss < market.market.log_loss ? "text-terminal-accent font-semibold" : "font-semibold"}>
+              Modèle {market.model.log_loss.toFixed(4)}
+            </div>
+            <div className={market.market.log_loss < market.model.log_loss ? "text-terminal-accent font-semibold" : "font-semibold"}>
+              Marché {market.market.log_loss.toFixed(4)}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-terminal-muted mb-1">Brier</div>
+            <div className={market.model.brier_score < market.market.brier_score ? "text-terminal-accent font-semibold" : "font-semibold"}>
+              Modèle {market.model.brier_score.toFixed(4)}
+            </div>
+            <div className={market.market.brier_score < market.model.brier_score ? "text-terminal-accent font-semibold" : "font-semibold"}>
+              Marché {market.market.brier_score.toFixed(4)}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-terminal-muted mb-1">Accuracy</div>
+            <div className={market.model.accuracy > market.market.accuracy ? "text-terminal-accent font-semibold" : "font-semibold"}>
+              Modèle {(market.model.accuracy * 100).toFixed(1)}%
+            </div>
+            <div className={market.market.accuracy > market.model.accuracy ? "text-terminal-accent font-semibold" : "font-semibold"}>
+              Marché {(market.market.accuracy * 100).toFixed(1)}%
+            </div>
+          </div>
+        </div>
+        <p className="text-[11px] text-terminal-muted pt-2 border-t border-terminal-border">
+          {market.n_matches} matchs · {market.evaluation_period}
+        </p>
+      </section>
 
       <section className="rounded-xl2 border border-terminal-border bg-terminal-panel p-6 space-y-4">
         <h2 className="text-sm uppercase tracking-wide text-terminal-muted">Calibration</h2>

@@ -112,6 +112,15 @@ export type CalibrationData = {
   reliability_curve: { predicted: number; observed: number }[];
 };
 
+export type MarketComparison = {
+  note: string;
+  n_matches: number;
+  evaluation_period: string;
+  model: { log_loss: number; brier_score: number; accuracy: number };
+  market: { log_loss: number; brier_score: number; accuracy: number };
+  model_beats_market: boolean;
+};
+
 class ApiError extends Error {}
 
 async function fetchJson<T>(path: string): Promise<T> {
@@ -140,5 +149,6 @@ export const getPowerRating = (matchId: string) => fetchJson<PowerRating>(`/matc
 export const getLeagues = () => fetchJson<League[]>(`/leagues`);
 export const getModelPerformance = () => fetchJson<ModelPerformance>(`/model/performance`);
 export const getCalibration = () => fetchJson<CalibrationData>(`/model/calibration`);
+export const getMarketComparison = () => fetchJson<MarketComparison>(`/model/market-comparison`);
 
 export { ApiError };

@@ -7,6 +7,8 @@ rather than inventing a value.
 """
 from __future__ import annotations
 
+import threading
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -21,12 +23,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# NOTE: an eager background cache warm-up (fitting every reachable match at
-# startup) was tried here and reverted — on a single shared free-tier CPU,
-# ~40 sequential model fits running in a background thread competed for the
-# same core as live requests and made things WORSE (live requests hung
-# instead of just being slow). Per-match_id caching in prediction_service
-# still applies lazily on first request, which is the safe version of this.
+# NOTE: an eager background cache warm-up that fit EVERY reachable match at
+# startup (~40 separate walk-forward fits) was tried here and reverted — on
+# a single shared free-tier CPU, that competed with live requests for the
+# whole warm-up window and made things WORSE. This is different: it's ONE
+# fit (the full-history model used by /fixtures/predict), so it's cheap and
+# finishes almost immediately — it exists purely so clicking "Analyser" on
+# a live fixture doesn't pay that one-time cost.
+@app.on_event("startup")
+def _warm_fixture_model() -> None:
+    threading.Thread(target=prediction_service.warm_full_history_model, daemon=True).start()
 
 
 @app.get("/matches")
@@ -175,6 +181,28 @@ def get_model_performance():
                           "(55.0% vs 55.8%). Not yet isotonic-calibrated. Served live by the API.",
             },
         ],
+    }
+
+
+@app.get("/model/market-comparison")
+def get_market_comparison():
+    """Real comparison against Pinnacle closing odds (the market's sharpest
+    bookmaker), computed by ml/evaluation/compare_vs_market.py using the
+    actual historical odds columns in our own downloaded CSVs — not a new
+    data source, and not cherry-picked: same 760-match test window as the
+    Dixon-Coles backtest reported elsewhere. Reported honestly even though
+    the market currently wins on every metric — see the note."""
+    return {
+        "note": "Le marché (cotes de clôture Pinnacle, considéré comme le bookmaker le plus juste) "
+                "reste actuellement plus précis que notre modèle sur ces 760 matchs. C'est attendu : "
+                "les bookmakers intègrent des informations que notre modèle Phase 1 n'a pas encore "
+                "(compositions, blessures, forme du moment, mouvements de marché). Nous l'affichons "
+                "quand même, honnêtement, plutôt que de prétendre le contraire.",
+        "n_matches": 760,
+        "evaluation_period": "2023-2024 et 2024-2025",
+        "model": {"log_loss": 0.9575, "brier_score": 0.5684, "accuracy": 0.5500},
+        "market": {"log_loss": 0.9330, "brier_score": 0.5505, "accuracy": 0.5750},
+        "model_beats_market": False,
     }
 
 

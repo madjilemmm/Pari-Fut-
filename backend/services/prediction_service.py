@@ -153,6 +153,22 @@ _FULL_HISTORY_DC_CACHE: DixonColesModel | None = None
 _FULL_HISTORY_ELO_CACHE: EloModel | None = None
 
 
+def warm_full_history_model() -> None:
+    """Pre-fits the single full-history model used by predict_upcoming(),
+    so the first click on a live fixture doesn't pay the fit cost (~1-2s
+    locally, more on a slow free-tier CPU). This is ONE fit, not a loop over
+    many matches — safe to run eagerly at startup, unlike the per-match
+    walk-forward warm-up that was tried and reverted earlier for
+    overloading the free-tier CPU."""
+    global _FULL_HISTORY_DC_CACHE, _FULL_HISTORY_ELO_CACHE
+    try:
+        df = _load_df()
+        _FULL_HISTORY_DC_CACHE = DixonColesModel.fit(df, xi=SELECTED_XI)
+        _FULL_HISTORY_ELO_CACHE = EloModel.fit(df)
+    except Exception:
+        pass  # DB not ready yet at startup is fine; predict_upcoming() will fit lazily.
+
+
 def predict_upcoming(home_team: str, away_team: str) -> dict:
     """Predicts a genuinely future fixture (from a live fixtures provider),
     using the model fit on the ENTIRE historical dataset — there is no
