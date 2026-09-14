@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   let leagues, matches, modelPerf;
   try {
-    [leagues, matches, modelPerf] = await Promise.all([getLeagues(), getMatches(6), getModelPerformance()]);
+    [leagues, matches, modelPerf] = await Promise.all([getLeagues(), getMatches(4), getModelPerformance()]);
   } catch (e) {
     return <ErrorCard message={e instanceof ApiError ? e.message : "Erreur inattendue."} />;
   }
@@ -16,10 +16,15 @@ export default async function HomePage() {
   const featured = matches[matches.length - 1];
   const others = matches.slice(0, matches.length - 1).reverse();
 
-  const [featuredPred, ...otherPreds] = await Promise.all([
-    getPrediction(featured.match_id).catch(() => undefined),
-    ...others.map((m) => getPrediction(m.match_id).catch(() => undefined)),
-  ]);
+  // Fetched sequentially, not Promise.all: each prediction refits a real
+  // model server-side, and the free-tier backend has limited CPU/RAM — this
+  // avoids spiking several concurrent fits at once (the cause of a 502
+  // outage observed in production).
+  const featuredPred = await getPrediction(featured.match_id).catch(() => undefined);
+  const otherPreds: (typeof featuredPred)[] = [];
+  for (const m of others) {
+    otherPreds.push(await getPrediction(m.match_id).catch(() => undefined));
+  }
 
   return (
     <div className="space-y-10">

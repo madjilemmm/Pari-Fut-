@@ -32,6 +32,28 @@ SELECTED_XI = 0.005  # chosen via validation grid search, see ml/evaluation/back
 
 _df: pd.DataFrame | None = None
 
+# The historical dataset is immutable for the lifetime of the process, so the
+# fitted model for a given match_id is always the same. Several endpoints
+# (predict/why/power-rating) independently needed a Dixon-Coles and/or Elo
+# fit for the SAME match — refitting each one from scratch (an L-BFGS-B
+# optimization over ~1500 rows) on every request is what was overloading the
+# free-tier backend when the frontend fetched several of them concurrently.
+# Caching by match_id removes the redundant work without changing any number.
+_dc_cache: dict[str, DixonColesModel] = {}
+_elo_cache: dict[str, EloModel] = {}
+
+
+def _fit_dixon_coles_for(match_id: str, history: pd.DataFrame) -> DixonColesModel:
+    if match_id not in _dc_cache:
+        _dc_cache[match_id] = DixonColesModel.fit(history, xi=SELECTED_XI)
+    return _dc_cache[match_id]
+
+
+def _fit_elo_for(match_id: str, history: pd.DataFrame) -> EloModel:
+    if match_id not in _elo_cache:
+        _elo_cache[match_id] = EloModel.fit(history)
+    return _elo_cache[match_id]
+
 
 def _load_df() -> pd.DataFrame:
     global _df
@@ -108,7 +130,7 @@ def predict_match(match_id: str) -> dict:
     if len(history) < 20:
         raise ValueError("Historique insuffisant pour ce match (Donnée indisponible).")
 
-    model = DixonColesModel.fit(history, xi=SELECTED_XI)
+    model = _fit_dixon_coles_for(match_id, history)
     pred = model.predict(row["HomeTeam"], row["AwayTeam"])
 
     home_hist = len(history[(history["HomeTeam"] == row["HomeTeam"]) | (history["AwayTeam"] == row["HomeTeam"])])
@@ -183,8 +205,8 @@ def why_match(match_id: str) -> dict:
     if len(history) < 20:
         raise ValueError("Historique insuffisant pour ce match (Donnée indisponible).")
 
-    model = DixonColesModel.fit(history, xi=SELECTED_XI)
-    elo = EloModel.fit(history)
+    model = _fit_dixon_coles_for(match_id, history)
+    elo = _fit_elo_for(match_id, history)
 
     home, away = row["HomeTeam"], row["AwayTeam"]
     home_attack = model.attack.get(home, 0.0)
@@ -236,7 +258,7 @@ def power_rating(match_id: str) -> dict:
         raise KeyError(f"match_id {match_id} introuvable")
     row = match.iloc[0]
     history = df[df["kickoff_utc"] < row["kickoff_utc"]]
-    elo = EloModel.fit(history)
+    elo = _fit_elo_for(match_id, history)
 
     all_ratings = sorted(elo.ratings.values())
     if len(all_ratings) < 5:
@@ -261,7 +283,7 @@ def elo_ratings_snapshot(as_of_match_id: str) -> dict:
         raise KeyError(f"match_id {as_of_match_id} introuvable")
     row = match.iloc[0]
     history = df[df["kickoff_utc"] < row["kickoff_utc"]]
-    elo = EloModel.fit(history)
+    elo = _fit_elo_for(as_of_match_id, history)
     return {
         "home_team": row["HomeTeam"],
         "away_team": row["AwayTeam"],
