@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { getLeagues, getMatches, getModelPerformance, ApiError } from "@/lib/api";
+import { getLeagues, getMatches, getModelPerformance, getUpcomingFixtures, ApiError } from "@/lib/api";
 import { LiveMatchCard } from "@/components/LiveMatchCard";
+import { LiveFixtureCard } from "@/components/LiveFixtureCard";
 import { ErrorCard, EmptyState } from "@/components/ErrorCard";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,11 @@ export default async function HomePage() {
   } catch (e) {
     return <ErrorCard message={e instanceof ApiError ? e.message : "Erreur inattendue."} />;
   }
+
+  // Real 2026-2027 fixtures from football-data.org, when the API key is
+  // configured. Never fabricated: if this fails or isn't configured, the
+  // honest empty state below is shown instead.
+  const upcoming = await getUpcomingFixtures(4).catch(() => []);
 
   const featured = matches[matches.length - 1];
   const others = matches.slice(0, matches.length - 1).reverse();
@@ -46,15 +52,25 @@ export default async function HomePage() {
         ))}
       </div>
 
-      {/* Honest, plain-language data status — no fake live calendar */}
-      <EmptyState
-        title="Pas encore de matchs à venir"
-        body="Le calendrier de la saison en cours n'est pas encore branché. En attendant, découvrez comment le modèle analyse de vrais matchs récents ci-dessous."
-      />
+      {upcoming.length > 0 ? (
+        <section>
+          <h2 className="text-sm uppercase tracking-wide text-terminal-muted mb-3">Prochains matchs</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {upcoming.map((f) => (
+              <LiveFixtureCard key={f.fixture_id} fixture={f} />
+            ))}
+          </div>
+        </section>
+      ) : (
+        <EmptyState
+          title="Pas encore de matchs à venir"
+          body="Le calendrier de la saison en cours n'est pas encore branché. En attendant, découvrez comment le modèle analyse de vrais matchs récents ci-dessous."
+        />
+      )}
 
-      {/* Featured match */}
+      {/* Featured historical match, always shown as a labeled example */}
       <section>
-        <h2 className="text-sm uppercase tracking-wide text-terminal-muted mb-3">Exemple d&apos;analyse</h2>
+        <h2 className="text-sm uppercase tracking-wide text-terminal-muted mb-3">Exemple d&apos;analyse (saison 2024-2025)</h2>
         <LiveMatchCard match={featured} featured />
       </section>
 

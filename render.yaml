@@ -16,4 +16,9 @@ services:
         fromDatabase:
           name: pari-fute-db
           property: connectionString
+      # football-data.org free-tier API key for live PL fixtures
+      # (GET /fixtures/upcoming, /fixtures/predict). sync: false means Render
+      # will prompt for it in the dashboard rather than storing it in git.
+      - key: FOOTBALL_DATA_API_TOKEN
+        sync: false
     healthCheckPath: /health

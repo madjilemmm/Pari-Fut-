@@ -94,6 +94,16 @@ export type ModelPerformance = {
   models: ModelSummary[];
 };
 
+export type UpcomingFixture = {
+  fixture_id: string;
+  home_team: string;
+  away_team: string;
+  kickoff_utc: string;
+  matchday: number | null;
+  league: string;
+  source: string;
+};
+
 export type CalibrationData = {
   model_version: string;
   note: string;
@@ -120,6 +130,9 @@ async function fetchJson<T>(path: string): Promise<T> {
 }
 
 export const getMatches = (limit = 20) => fetchJson<MatchSummary[]>(`/matches?limit=${limit}`);
+export const getUpcomingFixtures = (limit = 6) => fetchJson<UpcomingFixture[]>(`/fixtures/upcoming?limit=${limit}`);
+export const getFixturePrediction = (home: string, away: string) =>
+  fetchJson<MatchPrediction>(`/fixtures/predict?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`);
 export const getPrediction = (matchId: string) => fetchJson<MatchPrediction>(`/matches/${matchId}/prediction`);
 export const getWhy = (matchId: string) => fetchJson<WhyMatch>(`/matches/${matchId}/why`);
 export const getForm = (matchId: string) => fetchJson<FormGuide>(`/matches/${matchId}/form`);

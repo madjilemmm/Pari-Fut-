@@ -10,7 +10,7 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.services import prediction_service
+from backend.services import prediction_service, live_fixtures
 
 app = FastAPI(title="Pari Futé API", version="0.1.0-phase1")
 
@@ -32,6 +32,22 @@ app.add_middleware(
 @app.get("/matches")
 def get_matches(limit: int = 20):
     return prediction_service.list_matches(limit=limit)
+
+
+@app.get("/fixtures/upcoming")
+def get_upcoming_fixtures(limit: int = 6):
+    try:
+        return live_fixtures.get_upcoming_fixtures(limit=limit)
+    except RuntimeError as e:
+        raise HTTPException(status_code=501, detail=str(e))
+
+
+@app.get("/fixtures/predict")
+def get_fixture_prediction(home: str, away: str):
+    try:
+        return prediction_service.predict_upcoming(home, away)
+    except (ValueError, FileNotFoundError) as e:
+        raise HTTPException(status_code=501, detail=f"Donnée indisponible: {e}")
 
 
 @app.get("/matches/{match_id}/prediction")

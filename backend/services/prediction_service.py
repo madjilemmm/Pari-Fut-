@@ -149,6 +149,54 @@ def predict_match(match_id: str) -> dict:
     }
 
 
+_FULL_HISTORY_DC_CACHE: DixonColesModel | None = None
+_FULL_HISTORY_ELO_CACHE: EloModel | None = None
+
+
+def predict_upcoming(home_team: str, away_team: str) -> dict:
+    """Predicts a genuinely future fixture (from a live fixtures provider),
+    using the model fit on the ENTIRE historical dataset — there is no
+    kickoff cutoff to respect here since nothing in our dataset is after
+    the match (unlike predict_match, which walks forward through history).
+
+    Caveat surfaced via confidence_score: our historical dataset stops in
+    May 2025, so this is fit on data up to ~16 months stale relative to the
+    2026-2027 season, and newly-promoted clubs have no history in it at all
+    (they get neutral/default attack-defense-Elo values, not fabricated ones)."""
+    global _FULL_HISTORY_DC_CACHE, _FULL_HISTORY_ELO_CACHE
+    df = _load_df()
+
+    if _FULL_HISTORY_DC_CACHE is None:
+        _FULL_HISTORY_DC_CACHE = DixonColesModel.fit(df, xi=SELECTED_XI)
+    if _FULL_HISTORY_ELO_CACHE is None:
+        _FULL_HISTORY_ELO_CACHE = EloModel.fit(df)
+
+    model = _FULL_HISTORY_DC_CACHE
+    pred = model.predict(home_team, away_team)
+
+    home_hist = len(df[(df["HomeTeam"] == home_team) | (df["AwayTeam"] == home_team)])
+    away_hist = len(df[(df["HomeTeam"] == away_team) | (df["AwayTeam"] == away_team)])
+    confidence, note = _confidence_score(home_hist, away_hist)
+    if home_hist == 0 or away_hist == 0:
+        confidence = round(confidence * 0.4, 1)
+        note = (
+            "Une des deux équipes n'a aucun historique dans notre base (promue en 2025-2026 ou "
+            "renommée) — la prédiction utilise des valeurs neutres par défaut, pas des données inventées. "
+            "Confiance fortement réduite en conséquence."
+        )
+    elif home_hist < 40 or away_hist < 40:
+        note += " Nos données s'arrêtent en mai 2025 : la saison 2025-2026 n'est pas encore intégrée."
+
+    return {
+        "home_team": home_team,
+        "away_team": away_team,
+        "model_version": MODEL_VERSION,
+        "confidence_score": confidence,
+        "confidence_note": note,
+        **pred,
+    }
+
+
 def simulate_match(match_id: str) -> dict:
     pred = predict_match(match_id)
     result = simulate(pred["home_xg"], pred["away_xg"])
