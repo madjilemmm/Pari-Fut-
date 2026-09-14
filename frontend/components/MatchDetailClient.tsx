@@ -114,7 +114,7 @@ export function MatchDetailClient({ matchId }: { matchId: string }) {
         {/* Left / main column */}
         <div className="lg:col-span-2 space-y-6">
           <section className="rounded-xl2 border border-terminal-border bg-terminal-panel p-6">
-            <h2 className="text-sm uppercase tracking-wide text-terminal-muted mb-4">Prédiction du modèle</h2>
+            <h2 className="text-sm uppercase tracking-wide text-terminal-muted mb-4">Qui va gagner ?</h2>
             <ProbabilityBar
               homeLabel={pred.home_team}
               awayLabel={pred.away_team}
@@ -126,13 +126,14 @@ export function MatchDetailClient({ matchId }: { matchId: string }) {
 
           <div className="grid sm:grid-cols-3 gap-4">
             <div className="rounded-xl2 border border-terminal-border bg-terminal-panel p-5">
-              <div className="text-xs uppercase tracking-wide text-terminal-muted mb-2">Expected Goals</div>
+              <div className="text-xs uppercase tracking-wide text-terminal-muted mb-2">Buts attendus (xG)</div>
               <div className="text-sm">
                 {pred.home_team}: <span className="font-semibold">{pred.home_xg.toFixed(2)}</span>
               </div>
               <div className="text-sm">
                 {pred.away_team}: <span className="font-semibold">{pred.away_xg.toFixed(2)}</span>
               </div>
+              <div className="text-[11px] text-terminal-muted mt-1">Nombre de buts que chaque équipe devrait marquer</div>
             </div>
             <div className="rounded-xl2 border border-terminal-border bg-terminal-panel p-5">
               <div className="text-xs uppercase tracking-wide text-terminal-muted mb-2">Score le plus probable</div>
@@ -159,7 +160,7 @@ export function MatchDetailClient({ matchId }: { matchId: string }) {
           </section>
 
           <section className="rounded-xl2 border border-terminal-border bg-terminal-panel p-6">
-            <h2 className="text-sm uppercase tracking-wide text-terminal-muted mb-4">Autres marchés</h2>
+            <h2 className="text-sm uppercase tracking-wide text-terminal-muted mb-4">Autres statistiques</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
               <div>
                 <div className="text-terminal-muted text-xs">Plus de 2,5 buts</div>
@@ -178,11 +179,11 @@ export function MatchDetailClient({ matchId }: { matchId: string }) {
                 <div className="font-semibold">{pct(pred.btts_prob)}</div>
               </div>
               <div>
-                <div className="text-terminal-muted text-xs">Clean sheet {pred.home_team}</div>
+                <div className="text-terminal-muted text-xs">{pred.home_team} ne prend aucun but</div>
                 <div className="font-semibold">{pct(pred.clean_sheet_home_prob)}</div>
               </div>
               <div>
-                <div className="text-terminal-muted text-xs">Clean sheet {pred.away_team}</div>
+                <div className="text-terminal-muted text-xs">{pred.away_team} ne prend aucun but</div>
                 <div className="font-semibold">{pct(pred.clean_sheet_away_prob)}</div>
               </div>
             </div>

@@ -15,11 +15,10 @@ export default async function ArchivesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-terminal-accent text-lg">Archives &amp; Backtest</h1>
+        <h1 className="text-terminal-accent text-lg">Matchs analysés</h1>
         <p className="text-terminal-muted text-sm mt-1">
-          Matchs historiques réels Premier League (football-data.co.uk, 2021–2025) utilisés pour entraîner et
-          valider le modèle. Chaque prédiction est recalculée en n&apos;utilisant que les données antérieures au
-          coup d&apos;envoi de ce match — aucune information future n&apos;est utilisée.
+          Ces matchs sont réels (Premier League, 2021–2025) et servent à vérifier que le modèle fonctionne bien.
+          Le calendrier de la saison en cours (2026-2027) n&apos;est pas encore branché — voir la page d&apos;accueil.
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">

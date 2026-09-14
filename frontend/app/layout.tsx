@@ -23,10 +23,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 ACCUEIL
               </Link>
               <Link href="/archives" className="hover:text-terminal-text whitespace-nowrap">
-                ARCHIVES
+                MATCHS
               </Link>
               <Link href="/model-performance" className="hover:text-terminal-text whitespace-nowrap">
-                PERFORMANCE
+                FIABILITÉ
               </Link>
               <Link href="/comment-ca-marche" className="hover:text-terminal-text whitespace-nowrap">
                 COMMENT ÇA MARCHE

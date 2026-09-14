@@ -21,8 +21,16 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-10">
+      {/* Friendly hero, plain language */}
+      <div className="text-center space-y-2 pt-2">
+        <h1 className="text-2xl sm:text-3xl font-bold">Le football, traduit en probabilités</h1>
+        <p className="text-terminal-muted text-sm max-w-md mx-auto">
+          Pas de pronostic magique : un vrai modèle statistique qui a fait ses preuves sur des centaines de matchs.
+        </p>
+      </div>
+
       {/* League tabs */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap justify-center">
         {leagues.map((l) => (
           <span
             key={l.code}
@@ -38,22 +46,22 @@ export default async function HomePage() {
         ))}
       </div>
 
-      {/* Live fixtures empty state — honest, no fake calendar */}
+      {/* Honest, plain-language data status — no fake live calendar */}
       <EmptyState
-        title="Prochains matchs"
-        body="Le calendrier live n'est pas encore connecté. Les analyses ci-dessous portent sur les matchs historiques déjà ingérés (voir Archives)."
+        title="Pas encore de matchs à venir"
+        body="Le calendrier de la saison en cours n'est pas encore branché. En attendant, découvrez comment le modèle analyse de vrais matchs récents ci-dessous."
       />
 
       {/* Featured match */}
       <section>
-        <h2 className="text-sm uppercase tracking-wide text-terminal-muted mb-3">Dernier match analysé</h2>
+        <h2 className="text-sm uppercase tracking-wide text-terminal-muted mb-3">Exemple d&apos;analyse</h2>
         <LiveMatchCard match={featured} featured />
       </section>
 
       {/* Other matches */}
       {others.length > 0 && (
         <section>
-          <h2 className="text-sm uppercase tracking-wide text-terminal-muted mb-3">Autres analyses</h2>
+          <h2 className="text-sm uppercase tracking-wide text-terminal-muted mb-3">Autres exemples</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             {others.map((m) => (
               <LiveMatchCard key={m.match_id} match={m} />
@@ -62,23 +70,19 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* Model status */}
-      <section className="rounded-xl2 border border-terminal-border bg-terminal-panel p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h2 className="text-sm uppercase tracking-wide text-terminal-muted mb-1">Model Status</h2>
-            <div className="text-xl font-semibold">{modelPerf.current_model.display_name} v0.2</div>
-            <div className="text-xs text-terminal-muted mt-1">
-              {modelPerf.current_model.n_predictions} matchs testés · Log Loss {modelPerf.current_model.log_loss}
-            </div>
-          </div>
-          <Link
-            href="/model-performance"
-            className="shrink-0 rounded-lg border border-terminal-border px-4 py-2 text-sm hover:border-terminal-accent transition text-center"
-          >
-            Voir les performances
-          </Link>
+      {/* Model status, simplified */}
+      <section className="rounded-xl2 border border-terminal-border bg-terminal-panel p-6 text-center">
+        <div className="text-sm text-terminal-muted mb-1">Le modèle a été testé sur</div>
+        <div className="text-3xl font-bold text-terminal-accent">{modelPerf.current_model.n_predictions} matchs</div>
+        <div className="text-sm text-terminal-muted mt-1">
+          qu&apos;il n&apos;avait jamais vus — avec {(modelPerf.current_model.accuracy * 100).toFixed(0)}% de bons résultats prédits
         </div>
+        <Link
+          href="/model-performance"
+          className="inline-block mt-4 rounded-lg border border-terminal-border px-5 py-2 text-sm hover:border-terminal-accent transition"
+        >
+          Voir le détail des performances
+        </Link>
       </section>
 
       {/* How it works teaser */}
